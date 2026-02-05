@@ -34,10 +34,14 @@ import org.openhab.core.auth.AuthenticationProvider;
 import org.openhab.core.auth.Credentials;
 import org.openhab.core.auth.GenericUser;
 import org.openhab.core.auth.UsernamePasswordCredentials;
+import org.openhab.core.auth.jaas.internal.ldap.LdapService;
+import org.openhab.core.auth.jaas.internal.ldap.LdapUserRealm;
+import org.openhab.core.auth.jaas.internal.managed.ManagedUserLoginConfiguration;
+import org.openhab.core.auth.jaas.internal.managed.ManagedUserLoginModule;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * Implementation of authentication provider which is backed by JAAS realm.
@@ -47,13 +51,21 @@ import org.osgi.service.component.annotations.Modified;
  * @author Łukasz Dywicki - Initial contribution
  * @author Kai Kreuzer - Removed ManagedService and used DS configuration instead
  * @author Yannick Schaus - provides a configuration with the ManagedUserLoginModule as a sufficient login module
+ * @author Florian Hotze - provides a configuration with the LDAPLoginModule as a sufficient login module
  */
 @NonNullByDefault
 @Component(configurationPid = "org.openhab.jaas")
 public class JaasAuthenticationProvider implements AuthenticationProvider {
     private static final String DEFAULT_REALM = "openhab";
 
+    private final LdapService ldapService;
     private @Nullable String realmName;
+
+    @Activate
+    public JaasAuthenticationProvider(final @Reference LdapService ldapService, Map<String, Object> properties) {
+        this.ldapService = ldapService;
+        modified(properties);
+    }
 
     @Override
     public Authentication authenticate(final Credentials credentials) throws AuthenticationException {
@@ -96,6 +108,10 @@ public class JaasAuthenticationProvider implements AuthenticationProvider {
                 Thread.currentThread().setContextClassLoader(ManagedUserLoginModule.class.getClassLoader());
                 loginContext = new LoginContext(realmName, subject, callbackHandler,
                         new ManagedUserLoginConfiguration());
+            } else if (LdapUserRealm.REALM_NAME.equals(realmName)) {
+                Thread.currentThread().setContextClassLoader(
+                        org.apache.karaf.jaas.modules.ldap.LDAPLoginModule.class.getClassLoader());
+                loginContext = new LoginContext(realmName, subject, callbackHandler, ldapService.getConfiguration());
             } else {
                 loginContext = new LoginContext(realmName, subject, callbackHandler);
             }
@@ -118,22 +134,8 @@ public class JaasAuthenticationProvider implements AuthenticationProvider {
         return principals.stream().map(Principal::getName).distinct().toArray(String[]::new);
     }
 
-    @Activate
-    protected void activate(Map<String, Object> properties) {
-        modified(properties);
-    }
-
-    @Deactivate
-    protected void deactivate(Map<String, Object> properties) {
-    }
-
     @Modified
     protected void modified(Map<String, Object> properties) {
-        if (properties == null) {
-            realmName = DEFAULT_REALM;
-            return;
-        }
-
         Object propertyValue = properties.get("realmName");
         if (propertyValue != null) {
             if (propertyValue instanceof String string) {
@@ -144,6 +146,12 @@ public class JaasAuthenticationProvider implements AuthenticationProvider {
         } else {
             // value could be unset, we should reset its value
             realmName = DEFAULT_REALM;
+        }
+
+        if (LdapService.LDAP_REALM.equals(realmName)) {
+            ldapService.enable();
+        } else {
+            ldapService.disable();
         }
     }
 

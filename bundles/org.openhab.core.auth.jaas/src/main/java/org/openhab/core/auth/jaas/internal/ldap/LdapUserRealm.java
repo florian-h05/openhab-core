@@ -10,31 +10,25 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.core.karaf.internal.jaas;
+package org.openhab.core.auth.jaas.internal.ldap;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
-import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
 import org.apache.karaf.jaas.boot.ProxyLoginModule;
 import org.apache.karaf.jaas.config.JaasRealm;
-import org.apache.karaf.shell.api.action.lifecycle.Service;
-import org.openhab.core.auth.UserRegistry;
-import org.osgi.service.component.annotations.Component;
 
 /**
- * A JAAS realm description for the {@link UserRegistry} based login module.
+ * A JAAS realm description for the LDAP login module.
  *
- * @author Yannick Schaus - initial contribution
+ * @author Florian Hotze - Initial contribution
  */
-@Component(service = JaasRealm.class)
-@Service
-public class ManagedUserRealm implements JaasRealm {
-
-    public static final String REALM_NAME = "openhab";
-    public static final String MODULE_CLASS = "org.openhab.core.auth.jaas.internal.managed.ManagedUserLoginModule";
+public class LdapUserRealm implements JaasRealm {
+    public static final String REALM_NAME = "ldap";
+    public static final String MODULE_CLASS = "org.apache.karaf.jaas.modules.ldap.LDAPLoginModule";
+    public static final AppConfigurationEntry.LoginModuleControlFlag FLAG = AppConfigurationEntry.LoginModuleControlFlag.SUFFICIENT;
 
     @Override
     public String getName() {
@@ -43,7 +37,7 @@ public class ManagedUserRealm implements JaasRealm {
 
     @Override
     public int getRank() {
-        return 1;
+        return 20;
     }
 
     @Override
@@ -51,7 +45,6 @@ public class ManagedUserRealm implements JaasRealm {
         Map<String, Object> options = new HashMap<>();
         options.put(ProxyLoginModule.PROPERTY_MODULE, MODULE_CLASS);
 
-        return new AppConfigurationEntry[] {
-                new AppConfigurationEntry(MODULE_CLASS, LoginModuleControlFlag.SUFFICIENT, options) };
+        return new AppConfigurationEntry[] { new AppConfigurationEntry(MODULE_CLASS, FLAG, options) };
     }
 }

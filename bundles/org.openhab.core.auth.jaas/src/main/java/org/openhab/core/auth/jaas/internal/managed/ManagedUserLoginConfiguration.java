@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.core.auth.jaas.internal;
+package org.openhab.core.auth.jaas.internal.managed;
 
 import java.util.HashMap;
 
