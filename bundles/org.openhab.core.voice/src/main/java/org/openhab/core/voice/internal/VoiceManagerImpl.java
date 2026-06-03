@@ -76,6 +76,7 @@ import org.openhab.core.voice.text.HumanLanguageInterpreter;
 import org.openhab.core.voice.text.InterpretationArguments;
 import org.openhab.core.voice.text.InterpretationException;
 import org.openhab.core.voice.text.InterpreterContext;
+import org.openhab.core.voice.text.ItemAccessResolver;
 import org.openhab.core.voice.text.conversation.Conversation;
 import org.openhab.core.voice.text.conversation.ConversationException;
 import org.openhab.core.voice.text.conversation.ConversationManager;
@@ -134,6 +135,7 @@ public class VoiceManagerImpl implements VoiceManager, ConfigOptionProvider, Dia
     private final TranslationProvider i18nProvider;
     private final Storage<DialogRegistration> dialogRegistrationStorage;
     private final ConversationManager conversationManager;
+    private final ItemAccessResolver itemAccessResolver;
     private final VoiceConfiguration configuration = new VoiceConfiguration();
 
     private @Nullable Bundle bundle;
@@ -147,7 +149,7 @@ public class VoiceManagerImpl implements VoiceManager, ConfigOptionProvider, Dia
     public VoiceManagerImpl(final @Reference LocaleProvider localeProvider, final @Reference AudioManager audioManager,
             final @Reference EventPublisher eventPublisher, final @Reference TranslationProvider i18nProvider,
             final @Reference StorageService storageService, final @Reference ConversationManager conversationManager,
-            final @Reference LLMToolRegistry llmToolRegistry) {
+            final @Reference ItemAccessResolver itemAccessResolver, final @Reference LLMToolRegistry llmToolRegistry) {
         this.localeProvider = localeProvider;
         this.audioManager = audioManager;
         this.eventPublisher = eventPublisher;
@@ -155,6 +157,7 @@ public class VoiceManagerImpl implements VoiceManager, ConfigOptionProvider, Dia
         this.dialogRegistrationStorage = storageService.getStorage(DialogRegistration.class.getName(),
                 this.getClass().getClassLoader());
         this.conversationManager = conversationManager;
+        this.itemAccessResolver = itemAccessResolver;
         this.llmToolRegistry = llmToolRegistry;
     }
 
@@ -183,6 +186,7 @@ public class VoiceManagerImpl implements VoiceManager, ConfigOptionProvider, Dia
         if (config != null) {
             configuration.update(config);
             conversationManager.setHistoryLimit(configuration.getConversationHistoryLimit());
+            itemAccessResolver.setImplicitAccessEnabled(configuration.isImplicitItemAccessEnabled());
         }
     }
 
