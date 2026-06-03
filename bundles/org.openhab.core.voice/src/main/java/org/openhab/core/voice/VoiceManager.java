@@ -398,4 +398,11 @@ public interface VoiceManager {
      */
     @Nullable
     Voice getDefaultVoice();
+
+    /**
+     * Returns true if HLIs should implicitly have access to all items.
+     *
+     * @return true if HLIs should implicitly have access to all items
+     */
+    boolean isImplicitItemAccess();
 }

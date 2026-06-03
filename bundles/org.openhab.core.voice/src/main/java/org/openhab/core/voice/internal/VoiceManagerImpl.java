@@ -1017,6 +1017,11 @@ public class VoiceManagerImpl implements VoiceManager, ConfigOptionProvider, Dia
     }
 
     @Override
+    public boolean isImplicitItemAccess() {
+        return configuration.isImplicitItemAccessEnabled();
+    }
+
+    @Override
     public @Nullable Collection<ParameterOption> getParameterOptions(URI uri, String param, @Nullable String context,
             @Nullable Locale locale) {
         if (VoiceConfiguration.CONFIG_URI.equals(uri.toString())) {

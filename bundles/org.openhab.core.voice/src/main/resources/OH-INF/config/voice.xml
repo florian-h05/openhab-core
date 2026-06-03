@@ -70,6 +70,11 @@
 			<description>The maximum number of messages to keep in a conversation history.</description>
 			<default>50</default>
 		</parameter>
+		<parameter name="implicitItemAccess" type="boolean">
+			<label>Implicit Item Access</label>
+			<description>If true, all items are implicitly accessible for HLIs, unless explicitly denied in the Item's metadata.</description>
+			<default>true</default>
+		</parameter>
 	</config-description>
 
 </config-description:config-descriptions>

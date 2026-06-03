@@ -44,6 +44,7 @@ public class VoiceConfiguration {
     public static final String CONFIG_DEFAULT_VOICE = "defaultVoice";
     public static final String CONFIG_PREFIX_DEFAULT_VOICE = "defaultVoice.";
     public static final String CONFIG_CONVERSATION_HISTORY_LIMIT = "conversationHistoryLimit";
+    public static final String CONFIG_IMPLICIT_ITEM_ACCESS = "implicitItemAccess";
 
     private final Logger logger = LoggerFactory.getLogger(VoiceConfiguration.class);
 
@@ -56,6 +57,7 @@ public class VoiceConfiguration {
     private @Nullable String defaultHLI;
     private @Nullable String defaultVoice;
     private int conversationHistoryLimit = Conversation.DEFAULT_MAX_MESSAGES;
+    private boolean implicitItemAccess = true;
     private final Map<String, String> defaultVoices = new HashMap<>();
 
     public void update(Map<String, Object> config) {
@@ -71,6 +73,8 @@ public class VoiceConfiguration {
         this.defaultHLI = config.containsKey(CONFIG_DEFAULT_HLI) ? config.get(CONFIG_DEFAULT_HLI).toString() : null;
         this.defaultVoice = config.containsKey(CONFIG_DEFAULT_VOICE) ? config.get(CONFIG_DEFAULT_VOICE).toString()
                 : null;
+        this.implicitItemAccess = !config.containsKey(CONFIG_IMPLICIT_ITEM_ACCESS)
+                || Boolean.parseBoolean(config.get(CONFIG_IMPLICIT_ITEM_ACCESS).toString());
 
         if (config.containsKey(CONFIG_CONVERSATION_HISTORY_LIMIT)) {
             try {
@@ -129,6 +133,10 @@ public class VoiceConfiguration {
 
     public int getConversationHistoryLimit() {
         return conversationHistoryLimit;
+    }
+
+    public boolean isImplicitItemAccessEnabled() {
+        return implicitItemAccess;
     }
 
     public Map<String, String> getDefaultVoices() {
