@@ -131,7 +131,7 @@ public class ItemAccessResolver {
      * @return true if the item is accessible, false otherwise
      */
     public boolean isAccessible(Item item) {
-        return accessCache.computeIfAbsent(item.getName(), (k) -> computeIsAccessible(item));
+        return accessCache.computeIfAbsent(item.getUID(), (k) -> computeIsAccessible(item));
     }
 
     private boolean computeIsAccessible(Item item) {
@@ -142,7 +142,7 @@ public class ItemAccessResolver {
 
         Set<String> visitedGroups = new HashSet<>();
         if (item instanceof GroupItem) {
-            visitedGroups.add(item.getName());
+            visitedGroups.add(item.getUID());
         }
         Boolean inherited = resolveInheritedAccess(item, visitedGroups);
         return inherited != null ? inherited : implicitAccessEnabled;
