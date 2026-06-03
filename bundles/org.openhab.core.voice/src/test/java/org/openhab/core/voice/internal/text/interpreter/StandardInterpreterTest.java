@@ -13,6 +13,7 @@
 package org.openhab.core.voice.internal.text.interpreter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -29,6 +30,7 @@ import java.util.Set;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,11 +62,13 @@ import org.openhab.core.voice.DialogContext;
 import org.openhab.core.voice.STTService;
 import org.openhab.core.voice.TTSService;
 import org.openhab.core.voice.text.InterpretationException;
+import org.openhab.core.voice.text.ItemAccessResolver;
 
 /**
  * Test the standard interpreter
  *
  * @author Miguel Álvarez - Initial contribution
+ * @author Florian Hotze - Implemented configurable Item access
  */
 @NonNullByDefault
 @ExtendWith(MockitoExtension.class)
@@ -74,6 +78,7 @@ public class StandardInterpreterTest {
 
     private @Mock @NonNullByDefault({}) ItemRegistry itemRegistryMock;
     private @Mock @NonNullByDefault({}) MetadataRegistry metadataRegistryMock;
+    private @NonNullByDefault({}) ItemAccessResolver itemAccessResolver;
     private @NonNullByDefault({}) StandardInterpreter standardInterpreter;
     private @NonNullByDefault({}) STTService sttService;
     private @NonNullByDefault({}) TTSService ttsService;
@@ -84,7 +89,17 @@ public class StandardInterpreterTest {
 
     @BeforeEach
     public void setUp() {
-        this.standardInterpreter = new StandardInterpreter(eventPublisherMock, itemRegistryMock, metadataRegistryMock);
+        itemAccessResolver = new ItemAccessResolver(itemRegistryMock, metadataRegistryMock);
+        itemAccessResolver.setImplicitAccessEnabled(true);
+        standardInterpreter = new StandardInterpreter(eventPublisherMock, itemRegistryMock, metadataRegistryMock,
+                itemAccessResolver);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        itemAccessResolver.dispose();
+        itemAccessResolver = null;
+        standardInterpreter = null;
     }
 
     @Test
@@ -94,7 +109,7 @@ public class StandardInterpreterTest {
         var computerScreenItem = new SwitchItem("screen");
         computerScreenItem.setLabel("Computer Screen");
         List<Item> items = List.of(computerItem, computerScreenItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
 
         // "computer" should only match computerItem, not computerScreenItem
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn off computer"));
@@ -115,7 +130,7 @@ public class StandardInterpreterTest {
         when(computerGroup.getMembers()).thenReturn(Set.of(computerSwitchItem));
         when(screenGroup.getMembers()).thenReturn(Set.of(screenSwitchItem));
         List<Item> items = List.of(computerGroup, computerSwitchItem, screenGroup, screenSwitchItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
 
         // "computer" should only match the computerSwitchItem member of computerGroup
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn off computer"));
@@ -135,7 +150,7 @@ public class StandardInterpreterTest {
         var dialogContext = new DialogContext(null, null, sttService, ttsService, null, List.of(), audioSource,
                 audioSink, Locale.ENGLISH, "", locationGroup.getName(), null, null, null, List.of());
         List<Item> items = List.of(computerItem2, locationGroup, computerItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
 
         // "computer" should only match the computerItem in the locationGroup
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn off computer", dialogContext));
@@ -152,7 +167,7 @@ public class StandardInterpreterTest {
         rollershutterItem.setLabel("lamp");
 
         List<Item> items = List.of(switchItem, rollershutterItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
 
         // "turn on" should only match the SwitchItem
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn on the lamp"));
@@ -177,7 +192,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(new MetadataKey(VOICE_SYSTEM_NAMESPACE, computerItem.getName())))
                 .thenReturn(null);
         List<Item> items = List.of(computerItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn off computer"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(computerItem.getName(), OnOffType.OFF));
@@ -207,7 +222,7 @@ public class StandardInterpreterTest {
         };
         brightness.setLabel("Brightness");
         List<Item> items = List.of(brightness);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "set the brightness to low"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(brightness.getName(), new PercentType(10)));
@@ -243,7 +258,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $cmd$ on|at the? $name$", null));
         List<Item> items = List.of(tvItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(tvItem.getName(), new StringType("KEY_4")));
@@ -267,7 +282,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $cmd$ on|at the? tv", null));
         List<Item> items = List.of(tvItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(tvItem.getName(), new StringType("KEY_4")));
@@ -291,7 +306,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "what $cmd$ is it", null));
         List<Item> items = List.of(triggerItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "what time is it?"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(triggerItem.getName(), new StringType("time")));
@@ -322,7 +337,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "what $cmd$ is it", configuration));
         List<Item> items = List.of(triggerItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "what time is it?"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(triggerItem.getName(), new StringType("time")));
@@ -337,7 +352,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $*$ on|at the? $name$", null));
         List<Item> items = List.of(tvItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(tvItem.getName(), new StringType("channel 4")));
@@ -354,7 +369,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $*$ on|at the? $name$", configuration));
         List<Item> items = List.of(tvItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals("", standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(tvItem.getName(), new StringType("channel 4")));
@@ -375,7 +390,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $*$ on|at the? $name$", configuration));
         List<Item> items = List.of(virtualItem, tvItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(tvItem.getName(), new StringType("channel 4")));
@@ -389,7 +404,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $*$", null));
         List<Item> items = List.of(virtualItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(virtualItem.getName(), new StringType("channel 4")));
@@ -419,7 +434,7 @@ public class StandardInterpreterTest {
         when(metadataRegistryMock.get(voiceMetadataKey))
                 .thenReturn(new Metadata(voiceMetadataKey, "watch|play $*$ on|at? the? tv", null));
         List<Item> items = List.of(virtualItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "watch channel 4 on the tv"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(virtualItem.getName(), new StringType("KEY_4")));
@@ -431,7 +446,7 @@ public class StandardInterpreterTest {
         var blindsItem = new RollershutterItem("blinds");
         blindsItem.setLabel("blinds");
         List<Item> items = List.of(blindsItem);
-        when(itemRegistryMock.getItems()).thenReturn(items);
+        when(itemRegistryMock.getAll()).thenReturn(items);
 
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "open blinds"));
         verify(eventPublisherMock, times(1))
@@ -451,5 +466,69 @@ public class StandardInterpreterTest {
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "close the blinds"));
         verify(eventPublisherMock, times(1))
                 .post(ItemEventFactory.createCommandEvent(blindsItem.getName(), UpDownType.DOWN));
+    }
+
+    @Test
+    public void denyAccessToItemViaMetadata() throws InterpretationException {
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        List<Item> items = List.of(lightItem);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+
+        MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, lightItem.getName());
+        HashMap<String, Object> configuration = new HashMap<>();
+        configuration.put("expose", false);
+        lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
+
+        // Should throw exception because item is not accessible
+        InterpretationException exception = org.junit.jupiter.api.Assertions.assertThrows(InterpretationException.class,
+                () -> {
+                    standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
+                });
+        assertEquals("There is no object named like that.", exception.getMessage());
+    }
+
+    @Test
+    public void allowAccessToItemViaMetadataWhenImplicitDenied() throws InterpretationException {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        List<Item> items = List.of(lightItem);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+
+        MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, lightItem.getName());
+        HashMap<String, Object> configuration = new HashMap<>();
+        configuration.put("expose", true);
+        lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
+
+        assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
+        verify(eventPublisherMock, times(1)).post(ItemEventFactory.createCommandEvent("light", OnOffType.ON));
+    }
+
+    @Test
+    public void inheritAccessFromParentGroup() throws InterpretationException {
+        var group = new GroupItem("allLights");
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        lightItem.addGroupName("allLights");
+
+        lenient().when(itemRegistryMock.getAll()).thenReturn(List.of(group));
+        lenient().when(itemRegistryMock.getAll()).thenReturn(List.of(group, lightItem));
+        lenient().when(itemRegistryMock.get("allLights")).thenReturn(group);
+
+        MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, group.getName());
+        HashMap<String, Object> configuration = new HashMap<>();
+        configuration.put("expose", false);
+        lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
+
+        // Should throw exception because it inherits deny from group
+        InterpretationException exception = org.junit.jupiter.api.Assertions.assertThrows(InterpretationException.class,
+                () -> {
+                    standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
+                });
+        assertEquals("There is no object named like that.", exception.getMessage());
     }
 }
