@@ -51,8 +51,8 @@ import org.osgi.service.component.annotations.Reference;
 @Component(immediate = true)
 @NonNullByDefault
 public class ItemAccessResolver {
-    private static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
-    private static final String EXPOSE_PROPERTY = "expose";
+    public static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
+    public static final String EXPOSE_PROPERTY = "expose";
 
     private final ItemRegistry itemRegistry;
     private final MetadataRegistry metadataRegistry;

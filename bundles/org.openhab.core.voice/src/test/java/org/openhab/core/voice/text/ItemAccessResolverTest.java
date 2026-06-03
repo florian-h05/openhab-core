@@ -14,6 +14,8 @@ package org.openhab.core.voice.text;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.openhab.core.voice.text.ItemAccessResolver.EXPOSE_PROPERTY;
+import static org.openhab.core.voice.text.ItemAccessResolver.VOICE_SYSTEM_NAMESPACE;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,9 +42,6 @@ import org.openhab.core.library.items.SwitchItem;
 @NonNullByDefault
 @ExtendWith(MockitoExtension.class)
 public class ItemAccessResolverTest {
-    private static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
-    private static final String EXPOSE_PROPERTY = "expose";
-
     private @Mock @NonNullByDefault({}) ItemRegistry itemRegistry;
     private @Mock @NonNullByDefault({}) MetadataRegistry metadataRegistry;
 
@@ -59,6 +58,117 @@ public class ItemAccessResolverTest {
     public void tearDown() {
         itemAccessResolver.dispose();
         itemAccessResolver = null;
+    }
+
+    @Test
+    public void testCacheWorks() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        // Metadata registry should only be queried once
+        verify(metadataRegistry, times(1)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnItemAdded() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(itemRegistry).addRegistryChangeListener(argThat(l -> {
+            l.added(item);
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnItemRemoved() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(itemRegistry).addRegistryChangeListener(argThat(l -> {
+            l.removed(item);
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnItemUpdated() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(itemRegistry).addRegistryChangeListener(argThat(l -> {
+            l.updated(item, item);
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnVoiceSystemMetadataAdded() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(metadataRegistry).addRegistryChangeListener(argThat(l -> {
+            l.added(new Metadata(new MetadataKey(VOICE_SYSTEM_NAMESPACE, item.getName()), "", Map.of()));
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnVoiceSystemMetadataRemoved() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(metadataRegistry).addRegistryChangeListener(argThat(l -> {
+            l.removed(new Metadata(new MetadataKey(VOICE_SYSTEM_NAMESPACE, item.getName()), "", Map.of()));
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheInvalidatedOnVoiceSystemMetadataUpdated() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(metadataRegistry).addRegistryChangeListener(argThat(l -> {
+            Metadata metadata = new Metadata(new MetadataKey(VOICE_SYSTEM_NAMESPACE, item.getName()), "", Map.of());
+            l.updated(metadata, metadata);
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testCacheNotInvalidatedOnOtherMetadataNamespace() {
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+        verify(metadataRegistry).addRegistryChangeListener(argThat(l -> {
+            l.added(new Metadata(new MetadataKey("otherNamespace", item.getName()), "", Map.of()));
+            return true;
+        }));
+        assertTrue(itemAccessResolver.isAccessible(item));
+
+        // Metadata registry should still only be queried once
+        verify(metadataRegistry, times(1)).get(any(MetadataKey.class));
     }
 
     @Test
