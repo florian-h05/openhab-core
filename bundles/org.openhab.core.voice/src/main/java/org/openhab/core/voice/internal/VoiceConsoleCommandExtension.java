@@ -49,6 +49,7 @@ import org.openhab.core.voice.VoiceManager;
 import org.openhab.core.voice.text.HumanLanguageInterpreter;
 import org.openhab.core.voice.text.InterpretationArguments;
 import org.openhab.core.voice.text.InterpretationException;
+import org.openhab.core.voice.text.ItemAccessResolver;
 import org.openhab.core.voice.text.conversation.Conversation;
 import org.openhab.core.voice.text.conversation.ConversationManager;
 import org.openhab.core.voice.text.interpreter.llm.LLMTool;
@@ -86,6 +87,7 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
     private static final String SUBCMD_STT_SERVICES = "sttservices";
     private static final String SUBCMD_TTS_SERVICES = "ttsservices";
     private static final String SUBCMD_LLM_TOOLS = "llmtools";
+    private static final String SUBCMD_ITEMS = "items";
     private static final String SUBCMD_CONVERSATION = "conversation";
     private static final String SUBCMD_CONVERSATION_REMOVE = "conversationremove";
 
@@ -95,12 +97,13 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
     private final AudioManager audioManager;
     private final LocaleProvider localeProvider;
     private final LLMToolRegistry llmToolRegistry;
+    private final ItemAccessResolver itemAccessResolver;
 
     @Activate
     public VoiceConsoleCommandExtension(final @Reference ConversationManager conversationManager,
             final @Reference VoiceManager voiceManager, final @Reference AudioManager audioManager,
             final @Reference LocaleProvider localeProvider, final @Reference ItemRegistry itemRegistry,
-            final @Reference LLMToolRegistry llmToolRegistry) {
+            final @Reference LLMToolRegistry llmToolRegistry, final @Reference ItemAccessResolver itemAccessResolver) {
         super("voice", "Commands around voice enablement features.");
         this.conversationManager = conversationManager;
         this.voiceManager = voiceManager;
@@ -108,6 +111,7 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
         this.localeProvider = localeProvider;
         this.itemRegistry = itemRegistry;
         this.llmToolRegistry = llmToolRegistry;
+        this.itemAccessResolver = itemAccessResolver;
     }
 
     @Override
@@ -140,6 +144,7 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
                 buildCommandUsage(SUBCMD_STT_SERVICES, "lists the Speech-to-Text services"),
                 buildCommandUsage(SUBCMD_TTS_SERVICES, "lists the Text-to-Speech services"),
                 buildCommandUsage(SUBCMD_LLM_TOOLS, "lists the LLM tools"),
+                buildCommandUsage(SUBCMD_ITEMS, "lists the Items that the voice system has access to"),
                 buildCommandUsage(SUBCMD_CONVERSATION + " [--uid true] <conversationId>",
                         "Displays conversation messages"),
                 buildCommandUsage(SUBCMD_CONVERSATION_REMOVE + " [--message-id <message-id>] <conversationId>",
@@ -284,6 +289,10 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
                 }
                 case SUBCMD_LLM_TOOLS -> {
                     listLLMTools(console);
+                    return;
+                }
+                case SUBCMD_ITEMS -> {
+                    listItems(console);
                     return;
                 }
                 case SUBCMD_CONVERSATION -> {
@@ -528,6 +537,25 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
             });
         } else {
             console.println("No LLM tools found.");
+        }
+    }
+
+    private void listItems(Console console) {
+        List<Item> accessibleItems = itemRegistry.getAll().stream() //
+                .filter(itemAccessResolver::isAccessible) //
+                .sorted(comparing(Item::getName)) //
+                .toList();
+        if (!accessibleItems.isEmpty()) {
+            accessibleItems.forEach(item -> {
+                String label = item.getLabel();
+                if (label != null) {
+                    console.println(String.format("  %s (%s)", label, item.getName()));
+                } else {
+                    console.println(String.format("  %s", item.getName()));
+                }
+            });
+        } else {
+            console.println("No accessible Items found.");
         }
     }
 
