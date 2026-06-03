@@ -1,0 +1,200 @@
+/*
+ * Copyright (c) 2010-2026 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
+package org.openhab.core.voice.text;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.openhab.core.items.GroupItem;
+import org.openhab.core.items.ItemRegistry;
+import org.openhab.core.items.Metadata;
+import org.openhab.core.items.MetadataKey;
+import org.openhab.core.items.MetadataRegistry;
+import org.openhab.core.library.items.SwitchItem;
+
+/**
+ * Tests for {@link ItemAccessResolver}.
+ *
+ * @author Florian Hotze - Initial contribution
+ */
+@NonNullByDefault
+@ExtendWith(MockitoExtension.class)
+public class ItemAccessResolverTest {
+    private static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
+    private static final String EXPOSE_PROPERTY = "expose";
+
+    private @Mock @NonNullByDefault({}) ItemRegistry itemRegistry;
+    private @Mock @NonNullByDefault({}) MetadataRegistry metadataRegistry;
+
+    private @NonNullByDefault({}) ItemAccessResolver itemAccessResolver;
+    private SwitchItem item = new SwitchItem("TestItem");
+
+    @BeforeEach
+    public void setUp() {
+        itemAccessResolver = new ItemAccessResolver(itemRegistry, metadataRegistry);
+        item = new SwitchItem("TestItem");
+    }
+
+    @AfterEach
+    public void tearDown() {
+        itemAccessResolver.dispose();
+        itemAccessResolver = null;
+    }
+
+    @Test
+    public void testExplicitAllowOnItem() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+        stubMetadata(item.getName(), true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testExplicitDenyOnItem() {
+        itemAccessResolver.setImplicitAccessEnabled(true);
+        stubMetadata(item.getName(), false);
+
+        assertFalse(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testInheritAllowFromParentGroup() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+        item.addGroupName("ParentGroup");
+        GroupItem parentGroup = new GroupItem("ParentGroup");
+        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        stubMetadata("ParentGroup", true);
+
+        assertTrue(itemAccessResolver.isAccessible(parentGroup));
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testInheritDenyFromParentGroup() {
+        itemAccessResolver.setImplicitAccessEnabled(true);
+        item.addGroupName("ParentGroup");
+        GroupItem parentGroup = new GroupItem("ParentGroup");
+        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        stubMetadata("ParentGroup", false);
+
+        assertFalse(itemAccessResolver.isAccessible(parentGroup));
+        assertFalse(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testMergingAccessHasPriorityOverNoAccess() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        item.addGroupName("DenyGroup");
+        item.addGroupName("AllowGroup");
+
+        GroupItem denyGroup = new GroupItem("DenyGroup");
+        GroupItem allowGroup = new GroupItem("AllowGroup");
+
+        when(itemRegistry.get("DenyGroup")).thenReturn(denyGroup);
+        when(itemRegistry.get("AllowGroup")).thenReturn(allowGroup);
+
+        stubMetadata("DenyGroup", false);
+        stubMetadata("AllowGroup", true);
+
+        // Even though one group denies, the other allows, and access has priority.
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testMultiLevelInheritance() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        item.addGroupName("ParentGroup");
+        GroupItem parentGroup = new GroupItem("ParentGroup");
+        parentGroup.addGroupName("GrandparentGroup");
+        GroupItem grandparentGroup = new GroupItem("GrandparentGroup");
+
+        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
+
+        // Parent has no metadata, grandparent allows
+        stubMetadata("GrandparentGroup", true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testFallbackToSystemDefaultTrue() {
+        itemAccessResolver.setImplicitAccessEnabled(true);
+
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testFallbackToSystemDefaultFalse() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        assertFalse(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testCircularGroupMembership() {
+        item.addGroupName("GroupA");
+        GroupItem groupA = new GroupItem("GroupA");
+        groupA.addGroupName("GroupB");
+        GroupItem groupB = new GroupItem("GroupB");
+        groupB.addGroupName("GroupA"); // Circular
+
+        when(itemRegistry.get("GroupA")).thenReturn(groupA);
+        when(itemRegistry.get("GroupB")).thenReturn(groupB);
+
+        // No explicit allow/deny, should fallback to default
+        itemAccessResolver.setImplicitAccessEnabled(true);
+        assertTrue(itemAccessResolver.isAccessible(item));
+        itemAccessResolver.setImplicitAccessEnabled(false);
+        assertFalse(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testGrandparentAllowParentDeny() {
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        item.addGroupName("ParentGroup");
+        GroupItem parentGroup = new GroupItem("ParentGroup");
+        parentGroup.addGroupName("GrandparentGroup");
+        GroupItem grandparentGroup = new GroupItem("GrandparentGroup");
+
+        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
+
+        stubMetadata("ParentGroup", false);
+        stubMetadata("GrandparentGroup", true);
+
+        // Grandparent allows, which should have priority over parent denying.
+        assertTrue(itemAccessResolver.isAccessible(item));
+    }
+
+    private void stubMetadata(String itemName, boolean expose) {
+        MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, itemName);
+        Map<String, Object> config = new HashMap<>();
+        config.put(EXPOSE_PROPERTY, expose);
+        Metadata metadata = new Metadata(key, "", config);
+        lenient().when(metadataRegistry.get(key)).thenReturn(metadata);
+    }
+}
