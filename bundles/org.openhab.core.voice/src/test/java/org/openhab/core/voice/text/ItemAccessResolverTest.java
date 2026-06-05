@@ -212,7 +212,7 @@ public class ItemAccessResolverTest {
     }
 
     @Test
-    public void testMergingAccessHasPriorityOverNoAccess() {
+    public void testMergingDenyHasPriorityOverAllow() {
         itemAccessResolver.setImplicitAccessEnabled(false);
 
         item.addGroupName("DenyGroup");
@@ -221,14 +221,14 @@ public class ItemAccessResolverTest {
         GroupItem denyGroup = new GroupItem("DenyGroup");
         GroupItem allowGroup = new GroupItem("AllowGroup");
 
-        when(itemRegistry.get("DenyGroup")).thenReturn(denyGroup);
-        when(itemRegistry.get("AllowGroup")).thenReturn(allowGroup);
+        lenient().when(itemRegistry.get("DenyGroup")).thenReturn(denyGroup);
+        lenient().when(itemRegistry.get("AllowGroup")).thenReturn(allowGroup);
 
         stubMetadata("DenyGroup", false);
         stubMetadata("AllowGroup", true);
 
-        // Even though one group denies, the other allows, and access has priority.
-        assertTrue(itemAccessResolver.isAccessible(item));
+        // Even though one group allows, the other denies, and no-access has priority.
+        assertFalse(itemAccessResolver.isAccessible(item));
     }
 
     @Test
@@ -240,8 +240,8 @@ public class ItemAccessResolverTest {
         parentGroup.addGroupName("GrandparentGroup");
         GroupItem grandparentGroup = new GroupItem("GrandparentGroup");
 
-        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
-        when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
+        lenient().when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        lenient().when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
 
         // Parent has no metadata, grandparent allows
         stubMetadata("GrandparentGroup", true);
@@ -271,8 +271,8 @@ public class ItemAccessResolverTest {
         GroupItem groupB = new GroupItem("GroupB");
         groupB.addGroupName("GroupA"); // Circular
 
-        when(itemRegistry.get("GroupA")).thenReturn(groupA);
-        when(itemRegistry.get("GroupB")).thenReturn(groupB);
+        lenient().when(itemRegistry.get("GroupA")).thenReturn(groupA);
+        lenient().when(itemRegistry.get("GroupB")).thenReturn(groupB);
 
         // No explicit allow/deny, should fallback to default
         itemAccessResolver.setImplicitAccessEnabled(true);
@@ -283,21 +283,40 @@ public class ItemAccessResolverTest {
 
     @Test
     public void testGrandparentAllowParentDeny() {
-        itemAccessResolver.setImplicitAccessEnabled(false);
+        itemAccessResolver.setImplicitAccessEnabled(true);
 
         item.addGroupName("ParentGroup");
         GroupItem parentGroup = new GroupItem("ParentGroup");
         parentGroup.addGroupName("GrandparentGroup");
         GroupItem grandparentGroup = new GroupItem("GrandparentGroup");
 
-        when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
-        when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
+        lenient().when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        lenient().when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
 
         stubMetadata("ParentGroup", false);
         stubMetadata("GrandparentGroup", true);
 
-        // Grandparent allows, which should have priority over parent denying.
-        assertTrue(itemAccessResolver.isAccessible(item));
+        // Parent denies, which should have priority over grandparent allowing.
+        assertFalse(itemAccessResolver.isAccessible(item));
+    }
+
+    @Test
+    public void testGrandparentDenyParentAllow() {
+        itemAccessResolver.setImplicitAccessEnabled(true);
+
+        item.addGroupName("ParentGroup");
+        GroupItem parentGroup = new GroupItem("ParentGroup");
+        parentGroup.addGroupName("GrandparentGroup");
+        GroupItem grandparentGroup = new GroupItem("GrandparentGroup");
+
+        lenient().when(itemRegistry.get("ParentGroup")).thenReturn(parentGroup);
+        lenient().when(itemRegistry.get("GrandparentGroup")).thenReturn(grandparentGroup);
+
+        stubMetadata("ParentGroup", true);
+        stubMetadata("GrandparentGroup", false);
+
+        // Grandparent denies, which should have priority over parent allowing.
+        assertFalse(itemAccessResolver.isAccessible(item));
     }
 
     private void stubMetadata(String itemName, boolean expose) {

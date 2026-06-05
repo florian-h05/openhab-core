@@ -39,9 +39,9 @@ import org.osgi.service.component.annotations.Reference;
  * {@code voiceSystem} metadata namespace.</li>
  * <li>Inheritance: If no explicit configuration is found on the Item itself, it inherits permissions from its parent
  * groups.</li>
- * <li>Merging and Priority: Parent permissions are merged. Access ({@code expose=true}) has priority over no-access
- * ({@code expose=false}). If any ancestor group explicitly allows access, the Item is accessible. If no ancestor
- * allows access but at least one explicitly denies it, the Item is not accessible.</li>
+ * <li>Merging and Priority: Parent permissions are merged. No-access ({@code expose=false}) has priority over access
+ * ({@code expose=true}). If any ancestor group explicitly denies access, the Item is not accessible. If no ancestor
+ * denies access but at least one explicitly allows it, the Item is accessible.</li>
  * <li>System Default: If no explicit configuration is found on the Item or any of its ancestors, the system-wide
  * default for implicit Item access is used.</li>
  * </ul>
@@ -149,29 +149,29 @@ public class ItemAccessResolver {
     }
 
     private @Nullable Boolean resolveInheritedAccess(Item item, Set<String> visitedGroups) {
-        boolean anyDenied = false;
+        boolean anyAllowed = false;
         for (String groupName : item.getGroupNames()) {
             if (visitedGroups.add(groupName)) {
                 Item group = itemRegistry.get(groupName);
                 if (group != null) {
                     Boolean expose = getExposeMetadata(group);
                     if (expose != null) {
-                        if (expose) {
-                            return true; // Access has priority over no-access
+                        if (!expose) {
+                            return false; // Deny has priority over allow
                         }
-                        anyDenied = true;
+                        anyAllowed = true;
                     }
                     Boolean inherited = resolveInheritedAccess(group, visitedGroups);
                     if (inherited != null) {
-                        if (inherited) {
-                            return true;
+                        if (!inherited) {
+                            return false;
                         }
-                        anyDenied = true;
+                        anyAllowed = true;
                     }
                 }
             }
         }
-        return anyDenied ? false : null;
+        return anyAllowed ? true : null;
     }
 
     private @Nullable Boolean getExposeMetadata(Item item) {
