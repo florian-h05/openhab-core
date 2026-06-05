@@ -144,9 +144,9 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
                 buildCommandUsage(SUBCMD_STT_SERVICES, "lists the Speech-to-Text services"),
                 buildCommandUsage(SUBCMD_TTS_SERVICES, "lists the Text-to-Speech services"),
                 buildCommandUsage(SUBCMD_LLM_TOOLS, "lists the LLM tools"),
-                buildCommandUsage(SUBCMD_ITEMS, "lists the Items that the voice system has access to"),
-                buildCommandUsage(SUBCMD_CONVERSATION + " [--uid true] <conversationId>",
-                        "Displays conversation messages"),
+                buildCommandUsage(SUBCMD_ITEMS + " [--all]",
+                        "lists the Items that the voice system has access to, optionally list all Items"),
+                buildCommandUsage(SUBCMD_CONVERSATION + " [--uid] <conversationId>", "Displays conversation messages"),
                 buildCommandUsage(SUBCMD_CONVERSATION_REMOVE + " [--message-id <message-id>] <conversationId>",
                         "Remove Conversation"));
     }
@@ -292,7 +292,7 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
                     return;
                 }
                 case SUBCMD_ITEMS -> {
-                    listItems(console);
+                    listItems(Arrays.copyOfRange(args, 1, args.length), console);
                     return;
                 }
                 case SUBCMD_CONVERSATION -> {
@@ -540,50 +540,69 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
         }
     }
 
-    private void listItems(Console console) {
-        List<Item> accessibleItems = itemRegistry.getAll().stream() //
-                .filter(itemAccessResolver::isAccessible) //
-                .sorted(comparing(Item::getName)) //
-                .toList();
-        if (!accessibleItems.isEmpty()) {
-            accessibleItems.forEach(item -> {
-                String label = item.getLabel();
-                if (label != null) {
-                    console.println(String.format("  %s (%s)", label, item.getName()));
-                } else {
-                    console.println(String.format("  %s", item.getName()));
-                }
-            });
+    private void listItems(String[] args, Console console) {
+        boolean all = Arrays.asList(args).contains("--all");
+
+        Collection<Item> items = all ? itemRegistry.getAll()
+                : itemRegistry.getAll().stream() //
+                        .filter(itemAccessResolver::isAccessible) //
+                        .toList();
+        List<Item> sortedItems = items.stream().sorted(comparing(Item::getName)).toList();
+
+        if (sortedItems.isEmpty()) {
+            console.println("No Items found.");
+            return;
+        }
+
+        record Row(String status, String itemName, String source) {
+        }
+
+        List<Row> rows = sortedItems.stream().map(item -> {
+            ItemAccessResolver.ItemAccess access = itemAccessResolver.getItemAccess(item);
+            return new Row(access.access() ? "Exposed" : "Hidden", item.getName(),
+                    Objects.requireNonNullElse(access.source(), ""));
+        }).toList();
+
+        int itemNameWidth = Math.max(rows.stream().mapToInt(r -> r.itemName.length()).max().orElse(0), 4);
+        int sourceWidth = Math.max(rows.stream().mapToInt(r -> r.source.length()).max().orElse(0), 6);
+
+        if (all) {
+            String format = " %-" + itemNameWidth + "s | %-7s | %-" + sourceWidth + "s";
+            console.println(String.format(format, "Item", "Status", "Source"));
+            console.println(
+                    String.format("-%s-+-%s-+-%s", "-".repeat(itemNameWidth), "-".repeat(7), "-".repeat(sourceWidth)));
+            for (Row row : rows) {
+                console.println(String.format(format, row.itemName, row.status, row.source));
+            }
         } else {
-            console.println("No accessible Items found.");
+            String format = " %-" + itemNameWidth + "s | %-" + sourceWidth + "s";
+            console.println(String.format(format, "Item", "Source"));
+            console.println(String.format("-%s-+-%s", "-".repeat(itemNameWidth), "-".repeat(sourceWidth)));
+            for (Row row : rows) {
+                console.println(String.format(format, row.itemName, row.source));
+            }
         }
     }
 
     private void printConversationMessages(String[] args, Console console) {
-        HashMap<String, String> parameters;
-        try {
-            parameters = parseNamedParameters(args, true);
-        } catch (IllegalStateException e) {
-            console.println(Objects.requireNonNullElse(e.getMessage(), "An error parsing positional parameters"));
+        List<String> argList = Arrays.asList(args);
+        boolean uid = argList.contains("--uid");
+        if (uid) {
+            argList.removeFirst();
+        }
+        if (argList.isEmpty()) {
+            console.println("Missing conversation ID.");
             return;
         }
-        String[] arguments = Arrays.copyOfRange(args, parameters.size() * 2, args.length);
-        if (arguments.length != 1) {
-            console.println("Incorrect number of arguments");
-            return;
-        }
-        boolean printUID = "true".equals(parameters.remove("uid"));
-        if (!parameters.isEmpty()) {
-            console.println("Argument " + parameters.keySet().stream().findAny().orElse("") + " is not supported");
-            return;
-        }
-        Conversation conversation = conversationManager.getConversation(arguments[0]);
+        String conversationId = argList.getFirst();
+
+        Conversation conversation = conversationManager.getConversation(conversationId);
         if (conversation.getMessages().isEmpty()) {
             console.println("Empty conversation");
             return;
         }
         for (var message : conversation.getMessages()) {
-            if (printUID) {
+            if (uid) {
                 console.printf("%s - %s|> %s\n", message.id(), message.role(), message.content());
             } else {
                 console.printf("%s|> %s\n", message.role(), message.content());
