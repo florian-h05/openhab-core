@@ -18,6 +18,7 @@ import java.util.Map.Entry;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.openhab.core.config.core.ConfigParser;
 import org.openhab.core.voice.text.conversation.Conversation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,8 @@ import org.slf4j.LoggerFactory;
 @NonNullByDefault
 public class VoiceConfiguration {
     // the default keyword to use if no other is configured
-    public static final String DEFAULT_KEYWORD = "Wakeup";
+    private static final String DEFAULT_KEYWORD = "Wakeup";
+    private static final boolean DEFAULT_IMPLICIT_ITEM_ACCESS = true;
 
     // constants for the configuration properties
     public static final String CONFIG_URI = "system:voice";
@@ -73,8 +75,8 @@ public class VoiceConfiguration {
         this.defaultHLI = config.containsKey(CONFIG_DEFAULT_HLI) ? config.get(CONFIG_DEFAULT_HLI).toString() : null;
         this.defaultVoice = config.containsKey(CONFIG_DEFAULT_VOICE) ? config.get(CONFIG_DEFAULT_VOICE).toString()
                 : null;
-        this.implicitItemAccess = !config.containsKey(CONFIG_IMPLICIT_ITEM_ACCESS)
-                || Boolean.parseBoolean(config.get(CONFIG_IMPLICIT_ITEM_ACCESS).toString());
+        ConfigParser.valueAsOrElse(config.containsKey(CONFIG_IMPLICIT_ITEM_ACCESS), Boolean.class,
+                DEFAULT_IMPLICIT_ITEM_ACCESS);
 
         if (config.containsKey(CONFIG_CONVERSATION_HISTORY_LIMIT)) {
             try {
