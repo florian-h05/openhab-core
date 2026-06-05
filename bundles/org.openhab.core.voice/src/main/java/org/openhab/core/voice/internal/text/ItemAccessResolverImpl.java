@@ -15,6 +15,7 @@ package org.openhab.core.voice.internal.text;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
@@ -42,8 +43,9 @@ public class ItemAccessResolverImpl implements ItemAccessResolver {
     private final ItemRegistry itemRegistry;
     private final MetadataRegistry metadataRegistry;
     private final ConcurrentHashMap<String, Boolean> accessCache = new ConcurrentHashMap<>();
+    private final AtomicLong changeCount = new AtomicLong();
 
-    private boolean implicitAccessEnabled = true;
+    private volatile boolean implicitAccessEnabled = true;
 
     private final RegistryChangeListener<Item> itemRegistryChangeListener = new RegistryChangeListener<>() {
         @Override
@@ -102,12 +104,20 @@ public class ItemAccessResolverImpl implements ItemAccessResolver {
 
     private void invalidate() {
         accessCache.clear();
+        changeCount.incrementAndGet();
     }
 
     @Override
     public void setImplicitAccessEnabled(boolean implicitAccessEnabled) {
-        this.implicitAccessEnabled = implicitAccessEnabled;
-        invalidate();
+        if (this.implicitAccessEnabled != implicitAccessEnabled) {
+            this.implicitAccessEnabled = implicitAccessEnabled;
+            invalidate();
+        }
+    }
+
+    @Override
+    public long getChangeCount() {
+        return changeCount.get();
     }
 
     @Override

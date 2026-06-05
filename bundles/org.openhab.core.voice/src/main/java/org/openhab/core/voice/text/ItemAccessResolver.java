@@ -64,6 +64,13 @@ public interface ItemAccessResolver {
      */
     void setImplicitAccessEnabled(boolean implicitAccessEnabled);
 
+    /**
+     * Returns a monotonically increasing value that changes whenever item access decisions may have changed.
+     *
+     * @return the current access change count
+     */
+    long getChangeCount();
+
     record ItemAccess(boolean access, @Nullable String source) {
     }
 }

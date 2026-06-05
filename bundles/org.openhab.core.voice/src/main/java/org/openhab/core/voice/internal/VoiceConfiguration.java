@@ -59,7 +59,7 @@ public class VoiceConfiguration {
     private @Nullable String defaultHLI;
     private @Nullable String defaultVoice;
     private int conversationHistoryLimit = Conversation.DEFAULT_MAX_MESSAGES;
-    private boolean implicitItemAccess = true;
+    private boolean implicitItemAccess = DEFAULT_IMPLICIT_ITEM_ACCESS;
     private final Map<String, String> defaultVoices = new HashMap<>();
 
     public void update(Map<String, Object> config) {
@@ -75,7 +75,7 @@ public class VoiceConfiguration {
         this.defaultHLI = config.containsKey(CONFIG_DEFAULT_HLI) ? config.get(CONFIG_DEFAULT_HLI).toString() : null;
         this.defaultVoice = config.containsKey(CONFIG_DEFAULT_VOICE) ? config.get(CONFIG_DEFAULT_VOICE).toString()
                 : null;
-        ConfigParser.valueAsOrElse(config.containsKey(CONFIG_IMPLICIT_ITEM_ACCESS), Boolean.class,
+        this.implicitItemAccess = ConfigParser.valueAsOrElse(config.get(CONFIG_IMPLICIT_ITEM_ACCESS), Boolean.class,
                 DEFAULT_IMPLICIT_ITEM_ACCESS);
 
         if (config.containsKey(CONFIG_CONVERSATION_HISTORY_LIMIT)) {

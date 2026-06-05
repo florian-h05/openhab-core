@@ -27,6 +27,7 @@ import static org.openhab.core.voice.text.interpreter.rulebased.AbstractRuleBase
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.ResourceBundle;
 import java.util.Set;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
@@ -486,7 +487,7 @@ public class StandardInterpreterTest {
                 () -> {
                     standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
                 });
-        assertEquals("There is no object named like that.", exception.getMessage());
+        assertEquals(noObjectsMessage(Locale.ENGLISH), exception.getMessage());
     }
 
     @Test
@@ -527,6 +528,29 @@ public class StandardInterpreterTest {
                 () -> {
                     standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
                 });
-        assertEquals("There is no object named like that.", exception.getMessage());
+        assertEquals(noObjectsMessage(Locale.ENGLISH), exception.getMessage());
+    }
+
+    @Test
+    public void invalidateRulesWhenImplicitAccessChanges() throws InterpretationException {
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        lenient().when(itemRegistryMock.getAll()).thenReturn(List.of(lightItem));
+
+        assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
+        verify(eventPublisherMock, times(1)).post(ItemEventFactory.createCommandEvent("light", OnOffType.ON));
+
+        reset(eventPublisherMock);
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        InterpretationException exception = org.junit.jupiter.api.Assertions.assertThrows(InterpretationException.class,
+                () -> {
+                    standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
+                });
+        assertEquals(noObjectsMessage(Locale.ENGLISH), exception.getMessage());
+    }
+
+    private String noObjectsMessage(Locale locale) {
+        return ResourceBundle.getBundle("LanguageSupport", locale).getString("no_objects");
     }
 }

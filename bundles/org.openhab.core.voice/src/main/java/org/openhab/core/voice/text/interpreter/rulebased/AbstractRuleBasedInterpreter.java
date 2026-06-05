@@ -130,6 +130,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
     private final ItemRegistry itemRegistry;
     private final EventPublisher eventPublisher;
     private final ItemAccessResolver itemAccessResolver;
+    private long itemAccessChangeCount;
 
     private final RegistryChangeListener<Item> registryChangeListener = new RegistryChangeListener<>() {
         @Override
@@ -165,7 +166,8 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
 
         private void invalidateIfRelevantMetadata(Metadata metadata) {
             String namespace = metadata.getUID().getNamespace();
-            if (namespace.equals(SYNONYMS_NAMESPACE) || namespace.equals(SEMANTICS_NAMESPACE)) {
+            if (namespace.equals(SYNONYMS_NAMESPACE) || namespace.equals(SEMANTICS_NAMESPACE)
+                    || namespace.equals(ItemAccessResolver.VOICE_SYSTEM_NAMESPACE)) {
                 invalidate();
             }
         }
@@ -177,6 +179,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
         this.itemRegistry = itemRegistry;
         this.metadataRegistry = metadataRegistry;
         this.itemAccessResolver = itemAccessResolver;
+        this.itemAccessChangeCount = itemAccessResolver.getChangeCount();
         itemRegistry.addRegistryChangeListener(registryChangeListener);
         metadataRegistry.addRegistryChangeListener(metadataChangeListener);
     }
@@ -257,6 +260,14 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
         languageRules.clear();
     }
 
+    private void invalidateIfItemAccessChanged() {
+        long currentItemAccessChangeCount = itemAccessResolver.getChangeCount();
+        if (itemAccessChangeCount != currentItemAccessChangeCount) {
+            itemAccessChangeCount = currentItemAccessChangeCount;
+            invalidate();
+        }
+    }
+
     /**
      * All the tokens (name parts) of the names of all the items in the {@link ItemRegistry}.
      *
@@ -264,6 +275,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
      * @return the identifier tokens
      */
     Set<String> getAllItemTokens(Locale locale) {
+        invalidateIfItemAccessChanged();
         Set<String> localeTokens = allItemTokens.get(locale);
         if (localeTokens == null) {
             allItemTokens.put(locale, localeTokens = new HashSet<>());
@@ -290,6 +302,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
      * @return the list of identifier token sets per item
      */
     Map<Item, ItemInterpretationMetadata> getItemTokens(Locale locale) {
+        invalidateIfItemAccessChanged();
         Map<Item, ItemInterpretationMetadata> localeTokens = itemTokens.get(locale);
         if (localeTokens == null) {
             itemTokens.put(locale, localeTokens = new HashMap<>());
@@ -382,6 +395,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
     }
 
     private @Nullable List<@NonNull Rule> getLanguageRules(@Nullable Locale locale) {
+        invalidateIfItemAccessChanged();
         if (!languageRules.containsKey(locale)) {
             createRules(locale);
         }

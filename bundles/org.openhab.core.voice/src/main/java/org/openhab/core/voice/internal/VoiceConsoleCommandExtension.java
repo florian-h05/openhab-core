@@ -16,6 +16,7 @@ import static java.util.Comparator.comparing;
 
 import java.io.FileNotFoundException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -585,10 +586,10 @@ public class VoiceConsoleCommandExtension extends AbstractConsoleCommandExtensio
     }
 
     private void printConversationMessages(String[] args, Console console) {
-        List<String> argList = Arrays.asList(args);
+        List<String> argList = new ArrayList<>(Arrays.asList(args));
         boolean uid = argList.contains("--uid");
         if (uid) {
-            argList.removeFirst();
+            argList.remove("--uid");
         }
         if (argList.isEmpty()) {
             console.println("Missing conversation ID.");
