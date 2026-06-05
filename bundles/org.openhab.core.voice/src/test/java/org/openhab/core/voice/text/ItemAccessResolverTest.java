@@ -15,6 +15,7 @@ package org.openhab.core.voice.text;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.openhab.core.voice.text.ItemAccessResolver.EXPOSE_PROPERTY;
+import static org.openhab.core.voice.text.ItemAccessResolver.SYSTEM_DEFAULT_SOURCE;
 import static org.openhab.core.voice.text.ItemAccessResolver.VOICE_SYSTEM_NAMESPACE;
 
 import java.util.HashMap;
@@ -177,6 +178,7 @@ public class ItemAccessResolverTest {
         stubMetadata(item.getName(), true);
 
         assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(item.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -185,6 +187,7 @@ public class ItemAccessResolverTest {
         stubMetadata(item.getName(), false);
 
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(item.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -197,6 +200,8 @@ public class ItemAccessResolverTest {
 
         assertTrue(itemAccessResolver.isAccessible(parentGroup));
         assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(parentGroup).source());
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -209,6 +214,8 @@ public class ItemAccessResolverTest {
 
         assertFalse(itemAccessResolver.isAccessible(parentGroup));
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(parentGroup).source());
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -229,6 +236,7 @@ public class ItemAccessResolverTest {
 
         // Even though one group allows, the other denies, and no-access has priority.
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(denyGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -247,6 +255,7 @@ public class ItemAccessResolverTest {
         stubMetadata("GrandparentGroup", true);
 
         assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(grandparentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -254,6 +263,7 @@ public class ItemAccessResolverTest {
         itemAccessResolver.setImplicitAccessEnabled(true);
 
         assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(SYSTEM_DEFAULT_SOURCE, itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -261,6 +271,7 @@ public class ItemAccessResolverTest {
         itemAccessResolver.setImplicitAccessEnabled(false);
 
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(SYSTEM_DEFAULT_SOURCE, itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -277,8 +288,10 @@ public class ItemAccessResolverTest {
         // No explicit allow/deny, should fallback to default
         itemAccessResolver.setImplicitAccessEnabled(true);
         assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(SYSTEM_DEFAULT_SOURCE, itemAccessResolver.getItemAccess(item).source());
         itemAccessResolver.setImplicitAccessEnabled(false);
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(SYSTEM_DEFAULT_SOURCE, itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -298,6 +311,7 @@ public class ItemAccessResolverTest {
 
         // Parent denies, which should have priority over grandparent allowing.
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     @Test
@@ -317,6 +331,7 @@ public class ItemAccessResolverTest {
 
         // Grandparent denies, which should have priority over parent allowing.
         assertFalse(itemAccessResolver.isAccessible(item));
+        assertEquals(grandparentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     private void stubMetadata(String itemName, boolean expose) {

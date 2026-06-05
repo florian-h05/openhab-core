@@ -53,6 +53,7 @@ import org.osgi.service.component.annotations.Reference;
 public class ItemAccessResolver {
     public static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
     public static final String EXPOSE_PROPERTY = "expose";
+    public static final String SYSTEM_DEFAULT_SOURCE = "system:default";
 
     private final ItemRegistry itemRegistry;
     private final MetadataRegistry metadataRegistry;
@@ -131,25 +132,32 @@ public class ItemAccessResolver {
      * @return true if the item is accessible, false otherwise
      */
     public boolean isAccessible(Item item) {
-        return accessCache.computeIfAbsent(item.getUID(), (k) -> computeIsAccessible(item));
+        return accessCache.computeIfAbsent(item.getUID(), (k) -> getItemAccess(item).access());
     }
 
-    private boolean computeIsAccessible(Item item) {
+    /**
+     * Gets the {@link ItemAccess} for an item.
+     * 
+     * @param item the item to check
+     * @return whether the item is accessible and what source defined the access state
+     */
+    public ItemAccess getItemAccess(Item item) {
         Boolean expose = getExposeMetadata(item);
         if (expose != null) {
-            return expose;
+            return new ItemAccess(expose, item.getName());
         }
 
         Set<String> visitedGroups = new HashSet<>();
         if (item instanceof GroupItem) {
             visitedGroups.add(item.getUID());
         }
-        Boolean inherited = resolveInheritedAccess(item, visitedGroups);
-        return inherited != null ? inherited : implicitAccessEnabled;
+        ItemAccess inherited = resolveInheritedAccess(item, visitedGroups);
+        return inherited != null ? inherited : new ItemAccess(implicitAccessEnabled, SYSTEM_DEFAULT_SOURCE);
     }
 
-    private @Nullable Boolean resolveInheritedAccess(Item item, Set<String> visitedGroups) {
+    private ItemAccessResolver.@Nullable ItemAccess resolveInheritedAccess(Item item, Set<String> visitedGroups) {
         boolean anyAllowed = false;
+        String anyAllowedSource = null;
         for (String groupName : item.getGroupNames()) {
             if (visitedGroups.add(groupName)) {
                 Item group = itemRegistry.get(groupName);
@@ -157,21 +165,23 @@ public class ItemAccessResolver {
                     Boolean expose = getExposeMetadata(group);
                     if (expose != null) {
                         if (!expose) {
-                            return false; // Deny has priority over allow
+                            return new ItemAccess(false, groupName); // Deny has priority over allow
                         }
                         anyAllowed = true;
+                        anyAllowedSource = groupName;
                     }
-                    Boolean inherited = resolveInheritedAccess(group, visitedGroups);
+                    ItemAccess inherited = resolveInheritedAccess(group, visitedGroups);
                     if (inherited != null) {
-                        if (!inherited) {
-                            return false;
+                        if (!inherited.access()) {
+                            return inherited;
                         }
                         anyAllowed = true;
+                        anyAllowedSource = inherited.source();
                     }
                 }
             }
         }
-        return anyAllowed ? true : null;
+        return anyAllowed ? new ItemAccess(true, anyAllowedSource) : null;
     }
 
     private @Nullable Boolean getExposeMetadata(Item item) {
@@ -185,5 +195,8 @@ public class ItemAccessResolver {
             }
         }
         return null;
+    }
+
+    public record ItemAccess(boolean access, @Nullable String source) {
     }
 }
