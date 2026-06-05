@@ -39,9 +39,10 @@ import org.osgi.service.component.annotations.Reference;
  * {@code voiceSystem} metadata namespace.</li>
  * <li>Inheritance: If no explicit configuration is found on the Item itself, it inherits permissions from its parent
  * groups.</li>
- * <li>Merging and Priority: Parent permissions are merged. No-access ({@code expose=false}) has priority over access
- * ({@code expose=true}). If any ancestor group explicitly denies access, the Item is not accessible. If no ancestor
- * denies access but at least one explicitly allows it, the Item is accessible.</li>
+ * <li>Merging and Priority: Parent permissions are merged. Within the same layer, no-access ({@code expose=false}) has
+ * priority over access ({@code expose=true}). The closest parent layer has priority over further away layers. If the
+ * closest layer(s) with explicit configuration contain a deny, the Item is not accessible. If they only contain
+ * allows, the Item is accessible.</li>
  * <li>System Default: If no explicit configuration is found on the Item or any of its ancestors, the system-wide
  * default for implicit Item access is used.</li>
  * </ul>
@@ -156,32 +157,43 @@ public class ItemAccessResolver {
     }
 
     private ItemAccessResolver.@Nullable ItemAccess resolveInheritedAccess(Item item, Set<String> visitedGroups) {
-        boolean anyAllowed = false;
-        String anyAllowedSource = null;
+        Set<String> currentLayer = new HashSet<>();
         for (String groupName : item.getGroupNames()) {
             if (visitedGroups.add(groupName)) {
+                currentLayer.add(groupName);
+            }
+        }
+
+        while (!currentLayer.isEmpty()) {
+            ItemAccess layerAllowed = null;
+            Set<String> nextLayer = new HashSet<>();
+
+            for (String groupName : currentLayer) {
                 Item group = itemRegistry.get(groupName);
-                if (group != null) {
-                    Boolean expose = getExposeMetadata(group);
-                    if (expose != null) {
-                        if (!expose) {
-                            return new ItemAccess(false, groupName); // Deny has priority over allow
-                        }
-                        anyAllowed = true;
-                        anyAllowedSource = groupName;
+                if (group == null) {
+                    continue;
+                }
+                Boolean expose = getExposeMetadata(group);
+                if (expose != null) {
+                    if (!expose) {
+                        return new ItemAccess(false, groupName); // Deny has priority in same layer
                     }
-                    ItemAccess inherited = resolveInheritedAccess(group, visitedGroups);
-                    if (inherited != null) {
-                        if (!inherited.access()) {
-                            return inherited;
-                        }
-                        anyAllowed = true;
-                        anyAllowedSource = inherited.source();
+                    layerAllowed = new ItemAccess(true, groupName);
+                }
+                for (String parentGroupName : group.getGroupNames()) {
+                    if (visitedGroups.add(parentGroupName)) {
+                        nextLayer.add(parentGroupName);
                     }
                 }
             }
+
+            if (layerAllowed != null) {
+                return layerAllowed;
+            }
+            currentLayer = nextLayer;
         }
-        return anyAllowed ? new ItemAccess(true, anyAllowedSource) : null;
+
+        return null;
     }
 
     private @Nullable Boolean getExposeMetadata(Item item) {

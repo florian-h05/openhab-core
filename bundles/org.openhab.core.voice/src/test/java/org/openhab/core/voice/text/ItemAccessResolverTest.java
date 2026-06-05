@@ -329,9 +329,9 @@ public class ItemAccessResolverTest {
         stubMetadata("ParentGroup", true);
         stubMetadata("GrandparentGroup", false);
 
-        // Grandparent denies, which should have priority over parent allowing.
-        assertFalse(itemAccessResolver.isAccessible(item));
-        assertEquals(grandparentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
+        // Parent allows, which should have priority over grandparent denying.
+        assertTrue(itemAccessResolver.isAccessible(item));
+        assertEquals(parentGroup.getName(), itemAccessResolver.getItemAccess(item).source());
     }
 
     private void stubMetadata(String itemName, boolean expose) {
