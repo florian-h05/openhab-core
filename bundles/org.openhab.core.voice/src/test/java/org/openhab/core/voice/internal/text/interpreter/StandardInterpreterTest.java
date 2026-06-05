@@ -19,6 +19,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.openhab.core.voice.internal.text.interpreter.StandardInterpreter.VOICE_SYSTEM_NAMESPACE;
+import static org.openhab.core.voice.text.ItemAccessResolver.EXPOSE_PROPERTY;
 import static org.openhab.core.voice.text.interpreter.rulebased.AbstractRuleBasedInterpreter.IS_FORCED_CONFIGURATION;
 import static org.openhab.core.voice.text.interpreter.rulebased.AbstractRuleBasedInterpreter.IS_SILENT_CONFIGURATION;
 import static org.openhab.core.voice.text.interpreter.rulebased.AbstractRuleBasedInterpreter.IS_TEMPLATE_CONFIGURATION;
@@ -474,11 +475,10 @@ public class StandardInterpreterTest {
         lightItem.setLabel("Light");
         List<Item> items = List.of(lightItem);
         lenient().when(itemRegistryMock.getAll()).thenReturn(items);
-        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
 
         MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, lightItem.getName());
         HashMap<String, Object> configuration = new HashMap<>();
-        configuration.put("expose", false);
+        configuration.put(EXPOSE_PROPERTY, false);
         lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
 
         // Should throw exception because item is not accessible
@@ -497,11 +497,10 @@ public class StandardInterpreterTest {
         lightItem.setLabel("Light");
         List<Item> items = List.of(lightItem);
         lenient().when(itemRegistryMock.getAll()).thenReturn(items);
-        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
 
         MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, lightItem.getName());
         HashMap<String, Object> configuration = new HashMap<>();
-        configuration.put("expose", true);
+        configuration.put(EXPOSE_PROPERTY, true);
         lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
 
         assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
@@ -515,13 +514,12 @@ public class StandardInterpreterTest {
         lightItem.setLabel("Light");
         lightItem.addGroupName("allLights");
 
-        lenient().when(itemRegistryMock.getAll()).thenReturn(List.of(group));
         lenient().when(itemRegistryMock.getAll()).thenReturn(List.of(group, lightItem));
         lenient().when(itemRegistryMock.get("allLights")).thenReturn(group);
 
         MetadataKey key = new MetadataKey(VOICE_SYSTEM_NAMESPACE, group.getName());
         HashMap<String, Object> configuration = new HashMap<>();
-        configuration.put("expose", false);
+        configuration.put(EXPOSE_PROPERTY, false);
         lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
 
         // Should throw exception because it inherits deny from group
