@@ -14,9 +14,9 @@ package org.openhab.core.voice.text;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-import static org.openhab.core.voice.text.ItemAccessResolver.EXPOSE_PROPERTY;
+import static org.openhab.core.voice.internal.text.ItemAccessResolverImpl.EXPOSE_PROPERTY;
+import static org.openhab.core.voice.internal.text.ItemAccessResolverImpl.VOICE_SYSTEM_NAMESPACE;
 import static org.openhab.core.voice.text.ItemAccessResolver.SYSTEM_DEFAULT_SOURCE;
-import static org.openhab.core.voice.text.ItemAccessResolver.VOICE_SYSTEM_NAMESPACE;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +34,7 @@ import org.openhab.core.items.Metadata;
 import org.openhab.core.items.MetadataKey;
 import org.openhab.core.items.MetadataRegistry;
 import org.openhab.core.library.items.SwitchItem;
+import org.openhab.core.voice.internal.text.ItemAccessResolverImpl;
 
 /**
  * Tests for {@link ItemAccessResolver}.
@@ -42,16 +43,16 @@ import org.openhab.core.library.items.SwitchItem;
  */
 @NonNullByDefault
 @ExtendWith(MockitoExtension.class)
-public class ItemAccessResolverTest {
+public class ItemAccessResolverImplTest {
     private @Mock @NonNullByDefault({}) ItemRegistry itemRegistry;
     private @Mock @NonNullByDefault({}) MetadataRegistry metadataRegistry;
 
-    private @NonNullByDefault({}) ItemAccessResolver itemAccessResolver;
+    private @NonNullByDefault({}) ItemAccessResolverImpl itemAccessResolver;
     private SwitchItem item = new SwitchItem("TestItem");
 
     @BeforeEach
     public void setUp() {
-        itemAccessResolver = new ItemAccessResolver(itemRegistry, metadataRegistry);
+        itemAccessResolver = new ItemAccessResolverImpl(itemRegistry, metadataRegistry);
         item = new SwitchItem("TestItem");
     }
 

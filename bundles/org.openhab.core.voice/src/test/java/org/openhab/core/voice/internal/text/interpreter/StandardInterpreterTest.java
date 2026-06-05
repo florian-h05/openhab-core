@@ -61,8 +61,8 @@ import org.openhab.core.types.State;
 import org.openhab.core.voice.DialogContext;
 import org.openhab.core.voice.STTService;
 import org.openhab.core.voice.TTSService;
+import org.openhab.core.voice.internal.text.ItemAccessResolverImpl;
 import org.openhab.core.voice.text.InterpretationException;
-import org.openhab.core.voice.text.ItemAccessResolver;
 
 /**
  * Test the standard interpreter
@@ -78,7 +78,7 @@ public class StandardInterpreterTest {
 
     private @Mock @NonNullByDefault({}) ItemRegistry itemRegistryMock;
     private @Mock @NonNullByDefault({}) MetadataRegistry metadataRegistryMock;
-    private @NonNullByDefault({}) ItemAccessResolver itemAccessResolver;
+    private @NonNullByDefault({}) ItemAccessResolverImpl itemAccessResolver;
     private @NonNullByDefault({}) StandardInterpreter standardInterpreter;
     private @NonNullByDefault({}) STTService sttService;
     private @NonNullByDefault({}) TTSService ttsService;
@@ -89,7 +89,7 @@ public class StandardInterpreterTest {
 
     @BeforeEach
     public void setUp() {
-        itemAccessResolver = new ItemAccessResolver(itemRegistryMock, metadataRegistryMock);
+        itemAccessResolver = new ItemAccessResolverImpl(itemRegistryMock, metadataRegistryMock);
         itemAccessResolver.setImplicitAccessEnabled(true);
         standardInterpreter = new StandardInterpreter(eventPublisherMock, itemRegistryMock, metadataRegistryMock,
                 itemAccessResolver);

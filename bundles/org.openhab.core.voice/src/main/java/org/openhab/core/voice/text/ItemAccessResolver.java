@@ -12,26 +12,12 @@
  */
 package org.openhab.core.voice.text;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.openhab.core.common.registry.RegistryChangeListener;
-import org.openhab.core.items.GroupItem;
 import org.openhab.core.items.Item;
-import org.openhab.core.items.ItemRegistry;
-import org.openhab.core.items.Metadata;
-import org.openhab.core.items.MetadataKey;
-import org.openhab.core.items.MetadataRegistry;
-import org.osgi.service.component.annotations.Activate;
-import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Deactivate;
-import org.osgi.service.component.annotations.Reference;
 
 /**
- * Utility class to resolve if an Item is accessible for Human Language Interpreters.
+ * Defines an utility service to resolve if an Item is accessible for Human Language Interpreters.
  * <p>
  * The access rules are as follows:
  * <ul>
@@ -49,82 +35,11 @@ import org.osgi.service.component.annotations.Reference;
  *
  * @author Florian Hotze - Initial contribution
  */
-@Component(immediate = true)
 @NonNullByDefault
-public class ItemAccessResolver {
-    public static final String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
-    public static final String EXPOSE_PROPERTY = "expose";
-    public static final String SYSTEM_DEFAULT_SOURCE = "system:default";
-
-    private final ItemRegistry itemRegistry;
-    private final MetadataRegistry metadataRegistry;
-    private final ConcurrentHashMap<String, Boolean> accessCache = new ConcurrentHashMap<>();
-
-    private boolean implicitAccessEnabled = true;
-
-    private final RegistryChangeListener<Item> itemRegistryChangeListener = new RegistryChangeListener<>() {
-        @Override
-        public void added(Item element) {
-            invalidate();
-        }
-
-        @Override
-        public void removed(Item element) {
-            invalidate();
-        }
-
-        @Override
-        public void updated(Item oldElement, Item element) {
-            invalidate();
-        }
-    };
-
-    private final RegistryChangeListener<Metadata> voiceSystemMetadataChangeListener = new RegistryChangeListener<>() {
-        @Override
-        public void added(Metadata element) {
-            invalidateIfVoiceSystemMetadata(element);
-        }
-
-        @Override
-        public void removed(Metadata element) {
-            invalidateIfVoiceSystemMetadata(element);
-        }
-
-        @Override
-        public void updated(Metadata oldElement, Metadata element) {
-            invalidateIfVoiceSystemMetadata(element);
-        }
-
-        private void invalidateIfVoiceSystemMetadata(Metadata metadata) {
-            if (metadata.getUID().getNamespace().equals(VOICE_SYSTEM_NAMESPACE)) {
-                invalidate();
-            }
-        }
-    };
-
-    @Activate
-    public ItemAccessResolver(final @Reference ItemRegistry itemRegistry,
-            final @Reference MetadataRegistry metadataRegistry) {
-        this.itemRegistry = itemRegistry;
-        this.metadataRegistry = metadataRegistry;
-        this.itemRegistry.addRegistryChangeListener(itemRegistryChangeListener);
-        this.metadataRegistry.addRegistryChangeListener(voiceSystemMetadataChangeListener);
-    }
-
-    @Deactivate
-    public void dispose() {
-        itemRegistry.removeRegistryChangeListener(itemRegistryChangeListener);
-        metadataRegistry.removeRegistryChangeListener(voiceSystemMetadataChangeListener);
-    }
-
-    private void invalidate() {
-        accessCache.clear();
-    }
-
-    public void setImplicitAccessEnabled(boolean implicitAccessEnabled) {
-        this.implicitAccessEnabled = implicitAccessEnabled;
-        invalidate();
-    }
+public interface ItemAccessResolver {
+    String VOICE_SYSTEM_NAMESPACE = "voiceSystem";
+    String EXPOSE_PROPERTY = "expose";
+    String SYSTEM_DEFAULT_SOURCE = "system:default";
 
     /**
      * Returns whether an item is accessible for {@link HumanLanguageInterpreter}s.
@@ -132,83 +47,23 @@ public class ItemAccessResolver {
      * @param item the item to check
      * @return true if the item is accessible, false otherwise
      */
-    public boolean isAccessible(Item item) {
-        return accessCache.computeIfAbsent(item.getUID(), (k) -> getItemAccess(item).access());
-    }
+    boolean isAccessible(Item item);
 
     /**
      * Gets the {@link ItemAccess} for an item.
-     * 
+     *
      * @param item the item to check
      * @return whether the item is accessible and what source defined the access state
      */
-    public ItemAccess getItemAccess(Item item) {
-        Boolean expose = getExposeMetadata(item);
-        if (expose != null) {
-            return new ItemAccess(expose, item.getName());
-        }
+    ItemAccess getItemAccess(Item item);
 
-        Set<String> visitedGroups = new HashSet<>();
-        if (item instanceof GroupItem) {
-            visitedGroups.add(item.getUID());
-        }
-        ItemAccess inherited = resolveInheritedAccess(item, visitedGroups);
-        return inherited != null ? inherited : new ItemAccess(implicitAccessEnabled, SYSTEM_DEFAULT_SOURCE);
-    }
+    /**
+     * Sets whether implicit item access is enabled through system settings.
+     * 
+     * @param implicitAccessEnabled whether all items are implicitly exposed to {@link HumanLanguageInterpreter}s
+     */
+    void setImplicitAccessEnabled(boolean implicitAccessEnabled);
 
-    private ItemAccessResolver.@Nullable ItemAccess resolveInheritedAccess(Item item, Set<String> visitedGroups) {
-        Set<String> currentLayer = new HashSet<>();
-        for (String groupName : item.getGroupNames()) {
-            if (visitedGroups.add(groupName)) {
-                currentLayer.add(groupName);
-            }
-        }
-
-        while (!currentLayer.isEmpty()) {
-            ItemAccess layerAllowed = null;
-            Set<String> nextLayer = new HashSet<>();
-
-            for (String groupName : currentLayer) {
-                Item group = itemRegistry.get(groupName);
-                if (group == null) {
-                    continue;
-                }
-                Boolean expose = getExposeMetadata(group);
-                if (expose != null) {
-                    if (!expose) {
-                        return new ItemAccess(false, groupName); // Deny has priority in same layer
-                    }
-                    layerAllowed = new ItemAccess(true, groupName);
-                }
-                for (String parentGroupName : group.getGroupNames()) {
-                    if (visitedGroups.add(parentGroupName)) {
-                        nextLayer.add(parentGroupName);
-                    }
-                }
-            }
-
-            if (layerAllowed != null) {
-                return layerAllowed;
-            }
-            currentLayer = nextLayer;
-        }
-
-        return null;
-    }
-
-    private @Nullable Boolean getExposeMetadata(Item item) {
-        Metadata metadata = metadataRegistry.get(new MetadataKey(VOICE_SYSTEM_NAMESPACE, item.getName()));
-        if (metadata != null) {
-            Object exposeValue = metadata.getConfiguration().get(EXPOSE_PROPERTY);
-            if (exposeValue instanceof Boolean b) {
-                return b;
-            } else if (exposeValue instanceof String s) {
-                return Boolean.parseBoolean(s);
-            }
-        }
-        return null;
-    }
-
-    public record ItemAccess(boolean access, @Nullable String source) {
+    record ItemAccess(boolean access, @Nullable String source) {
     }
 }
