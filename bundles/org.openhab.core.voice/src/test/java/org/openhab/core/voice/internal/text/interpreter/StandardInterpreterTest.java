@@ -509,6 +509,25 @@ public class StandardInterpreterTest {
     }
 
     @Test
+    public void changingImplicitAccessInvalidatesCachedItemRules() throws InterpretationException {
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        List<Item> items = List.of(lightItem);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+
+        assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
+        verify(eventPublisherMock, times(1)).post(ItemEventFactory.createCommandEvent("light", OnOffType.ON));
+        reset(eventPublisherMock);
+
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        org.junit.jupiter.api.Assertions.assertThrows(InterpretationException.class, () -> {
+            standardInterpreter.interpret(Locale.ENGLISH, "turn on light");
+        });
+        verify(eventPublisherMock, times(0)).post(Mockito.any());
+    }
+
+    @Test
     public void inheritAccessFromParentGroup() throws InterpretationException {
         var group = new GroupItem("allLights");
         var lightItem = new SwitchItem("light");

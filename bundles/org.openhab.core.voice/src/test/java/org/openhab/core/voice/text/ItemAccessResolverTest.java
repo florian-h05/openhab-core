@@ -25,8 +25,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.openhab.core.common.registry.RegistryChangeListener;
 import org.openhab.core.items.GroupItem;
 import org.openhab.core.items.ItemRegistry;
 import org.openhab.core.items.Metadata;
@@ -154,6 +156,31 @@ public class ItemAccessResolverTest {
         assertTrue(itemAccessResolver.isAccessible(item));
 
         verify(metadataRegistry, times(2)).get(any(MetadataKey.class));
+    }
+
+    @Test
+    public void testAccessChangeListenerNotifiedOnImplicitAccessChange() {
+        int[] notifications = new int[1];
+        itemAccessResolver.addAccessChangeListener(() -> notifications[0]++);
+
+        itemAccessResolver.setImplicitAccessEnabled(false);
+
+        assertEquals(1, notifications[0]);
+    }
+
+    @Test
+    public void testAccessChangeListenerNotifiedOnVoiceSystemMetadataChange() {
+        int[] notifications = new int[1];
+        itemAccessResolver.addAccessChangeListener(() -> notifications[0]++);
+        Metadata metadata = new Metadata(new MetadataKey(VOICE_SYSTEM_NAMESPACE, item.getName()), "", Map.of());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<RegistryChangeListener<Metadata>> listenerCaptor = ArgumentCaptor
+                .forClass(RegistryChangeListener.class);
+        verify(metadataRegistry).addRegistryChangeListener(listenerCaptor.capture());
+        listenerCaptor.getValue().updated(metadata, metadata);
+
+        assertEquals(1, notifications[0]);
     }
 
     @Test

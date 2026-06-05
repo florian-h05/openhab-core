@@ -130,6 +130,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
     private final ItemRegistry itemRegistry;
     private final EventPublisher eventPublisher;
     private final ItemAccessResolver itemAccessResolver;
+    private final Runnable itemAccessChangeListener = this::invalidate;
 
     private final RegistryChangeListener<Item> registryChangeListener = new RegistryChangeListener<>() {
         @Override
@@ -179,11 +180,13 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
         this.itemAccessResolver = itemAccessResolver;
         itemRegistry.addRegistryChangeListener(registryChangeListener);
         metadataRegistry.addRegistryChangeListener(metadataChangeListener);
+        itemAccessResolver.addAccessChangeListener(itemAccessChangeListener);
     }
 
     protected void deactivate() {
         itemRegistry.removeRegistryChangeListener(registryChangeListener);
         metadataRegistry.removeRegistryChangeListener(metadataChangeListener);
+        itemAccessResolver.removeAccessChangeListener(itemAccessChangeListener);
     }
 
     /**

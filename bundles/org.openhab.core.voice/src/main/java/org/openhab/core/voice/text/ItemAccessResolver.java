@@ -57,6 +57,7 @@ public class ItemAccessResolver {
     private final ItemRegistry itemRegistry;
     private final MetadataRegistry metadataRegistry;
     private final ConcurrentHashMap<String, Boolean> accessCache = new ConcurrentHashMap<>();
+    private final Set<Runnable> accessChangeListeners = ConcurrentHashMap.newKeySet();
 
     private boolean implicitAccessEnabled = true;
 
@@ -117,11 +118,30 @@ public class ItemAccessResolver {
 
     private void invalidate() {
         accessCache.clear();
+        accessChangeListeners.forEach(Runnable::run);
     }
 
     public void setImplicitAccessEnabled(boolean implicitAccessEnabled) {
         this.implicitAccessEnabled = implicitAccessEnabled;
         invalidate();
+    }
+
+    /**
+     * Adds a listener that is notified whenever item access may have changed.
+     *
+     * @param listener the listener to add
+     */
+    public void addAccessChangeListener(Runnable listener) {
+        accessChangeListeners.add(listener);
+    }
+
+    /**
+     * Removes a previously registered item access change listener.
+     *
+     * @param listener the listener to remove
+     */
+    public void removeAccessChangeListener(Runnable listener) {
+        accessChangeListeners.remove(listener);
     }
 
     /**
