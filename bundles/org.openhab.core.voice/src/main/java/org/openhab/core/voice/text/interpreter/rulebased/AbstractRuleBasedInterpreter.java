@@ -54,6 +54,7 @@ import org.openhab.core.voice.text.HumanLanguageInterpreter;
 import org.openhab.core.voice.text.InterpretationException;
 import org.openhab.core.voice.text.InterpretationResult;
 import org.openhab.core.voice.text.InterpreterContext;
+import org.openhab.core.voice.text.UnrecoverableInterpretationException;
 import org.openhab.core.voice.text.conversation.Conversation;
 import org.openhab.core.voice.text.conversation.ConversationException;
 import org.openhab.core.voice.text.conversation.ConversationRole;
@@ -229,7 +230,8 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
         return response;
     }
 
-    private String interpret(Locale locale, String text, @Nullable String locationItem) throws InterpretationException {
+    protected String interpret(Locale locale, String text, @Nullable String locationItem)
+            throws InterpretationException {
         ResourceBundle language = ResourceBundle.getBundle(LANGUAGE_SUPPORT, locale);
         Rule[] rules = getRules(locale);
         if (rules.length == 0) {
@@ -247,6 +249,9 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
             if ((result = rule.execute(language, tokens, locationItem)).isSuccess()) {
                 return result.getResponse();
             } else {
+                if (result.getException() instanceof UnrecoverableInterpretationException unrecoverable) {
+                    throw unrecoverable;
+                }
                 if (!InterpretationResult.SYNTAX_ERROR.equals(result)) {
                     lastResult = result;
                 }
@@ -899,7 +904,7 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
     }
 
     private String trySendCommand(ResourceBundle language, Item item, Command command, boolean isForced,
-            boolean isSilent) {
+            boolean isSilent) throws InterpretationException {
         if (command instanceof State newState) {
             try {
                 State oldState = item.getStateAs(newState.getClass());
@@ -921,10 +926,20 @@ public abstract class AbstractRuleBasedInterpreter implements HumanLanguageInter
         }
         if (itemPermissionResolver.getPermission(item) != ItemPermission.READ_WRITE) {
             logger.debug("Cannot send command to read-only item {}", item.getName());
-            return language.getString(READ_ONLY);
+            throw new UnrecoverableInterpretationException(language.getString(READ_ONLY));
         }
-        eventPublisher.post(ItemEventFactory.createCommandEvent(item.getName(), command, VOICE_SOURCE));
+        postCommand(item, command);
         return !isSilent ? language.getString(OK) : "";
+    }
+
+    /**
+     * Posts a command event to the event bus for the given item.
+     *
+     * @param item the item to command
+     * @param command the command to send
+     */
+    protected void postCommand(Item item, Command command) {
+        eventPublisher.post(ItemEventFactory.createCommandEvent(item.getName(), command, VOICE_SOURCE));
     }
 
     /**

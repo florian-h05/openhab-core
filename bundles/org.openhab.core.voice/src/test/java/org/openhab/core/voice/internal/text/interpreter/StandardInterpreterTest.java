@@ -13,6 +13,7 @@
 package org.openhab.core.voice.internal.text.interpreter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -70,9 +71,11 @@ import org.openhab.core.voice.security.ItemPermission;
 import org.openhab.core.voice.stt.STTService;
 import org.openhab.core.voice.text.InterpretationException;
 import org.openhab.core.voice.text.InterpreterContext;
+import org.openhab.core.voice.text.UnrecoverableInterpretationException;
 import org.openhab.core.voice.text.conversation.Conversation;
 import org.openhab.core.voice.text.conversation.ConversationException;
 import org.openhab.core.voice.text.conversation.ConversationRole;
+import org.openhab.core.voice.text.interpreter.llm.LLMToolCall;
 import org.openhab.core.voice.tts.TTSService;
 
 /**
@@ -187,16 +190,32 @@ public class StandardInterpreterTest {
         Conversation conversation1 = new Conversation("c1");
         conversation1.addMessage(ConversationRole.USER, "turn on light");
         InterpreterContext context1 = new InterpreterContext(conversation1, List.of(), "kitchen", null);
-        assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, context1));
+        assertEquals("", standardInterpreter.interpret(Locale.ENGLISH, context1));
         verify(eventPublisherMock, times(1)).post(ItemEventFactory.createCommandEvent("light1", OnOffType.ON, any()));
+        assertEquals(3, conversation1.getMessages().size());
+        assertEquals(ConversationRole.USER, conversation1.getMessages().get(0).role());
+        assertEquals(ConversationRole.TOOL_CALL, conversation1.getMessages().get(1).role());
+        LLMToolCall toolCall1 = LLMToolCall.fromJson(conversation1.getMessages().get(1).content());
+        assertEquals("item-send-command", toolCall1.tool);
+        assertEquals("light1", toolCall1.params.get("itemName"));
+        assertEquals("ON", toolCall1.params.get("command"));
+        assertEquals(ConversationRole.TOOL_RETURN, conversation1.getMessages().get(2).role());
 
         reset(eventPublisherMock);
         // Match light2 by location context livingRoom
         Conversation conversation2 = new Conversation("c2");
         conversation2.addMessage(ConversationRole.USER, "turn on light");
         InterpreterContext context2 = new InterpreterContext(conversation2, List.of(), "livingRoom", null);
-        assertEquals(OK_RESPONSE, standardInterpreter.interpret(Locale.ENGLISH, context2));
+        assertEquals("", standardInterpreter.interpret(Locale.ENGLISH, context2));
         verify(eventPublisherMock, times(1)).post(ItemEventFactory.createCommandEvent("light2", OnOffType.ON, any()));
+        assertEquals(3, conversation2.getMessages().size());
+        assertEquals(ConversationRole.USER, conversation2.getMessages().get(0).role());
+        assertEquals(ConversationRole.TOOL_CALL, conversation2.getMessages().get(1).role());
+        LLMToolCall toolCall2 = LLMToolCall.fromJson(conversation2.getMessages().get(1).content());
+        assertEquals("item-send-command", toolCall2.tool);
+        assertEquals("light2", toolCall2.params.get("itemName"));
+        assertEquals("ON", toolCall2.params.get("command"));
+        assertEquals(ConversationRole.TOOL_RETURN, conversation2.getMessages().get(2).role());
     }
 
     @Test
@@ -620,7 +639,7 @@ public class StandardInterpreterTest {
     }
 
     @Test
-    public void rejectCommandWhenReadOnly() throws InterpretationException {
+    public void rejectCommandWhenReadOnly() {
         var lightItem = new SwitchItem("light");
         lightItem.setLabel("Light");
         List<Item> items = List.of(lightItem);
@@ -631,8 +650,32 @@ public class StandardInterpreterTest {
         configuration.put(PERMISSION_PROPERTY, ItemPermission.READ_ONLY.name());
         lenient().when(metadataRegistryMock.get(key)).thenReturn(new Metadata(key, "", configuration));
 
-        assertEquals(readOnlyMessage(Locale.ENGLISH), standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
+        UnrecoverableInterpretationException exception = assertThrows(UnrecoverableInterpretationException.class,
+                () -> standardInterpreter.interpret(Locale.ENGLISH, "turn on light"));
+        assertEquals(readOnlyMessage(Locale.ENGLISH), exception.getMessage());
         verify(eventPublisherMock, never()).post(any());
+    }
+
+    @Test
+    public void interpretWhenItemAlreadyInStateAddsOpenhabMessage()
+            throws InterpretationException, ConversationException {
+        var lightItem = new SwitchItem("light");
+        lightItem.setLabel("Light");
+        lightItem.setState(OnOffType.ON);
+        List<Item> items = List.of(lightItem);
+        lenient().when(itemRegistryMock.getAll()).thenReturn(items);
+
+        Conversation conversation = new Conversation("c_state");
+        conversation.addMessage(ConversationRole.USER, "turn on light");
+        InterpreterContext context = new InterpreterContext(conversation, List.of(), null, null);
+
+        String result = standardInterpreter.interpret(Locale.ENGLISH, context);
+        assertEquals("The object is already on.", result);
+        verify(eventPublisherMock, never()).post(any());
+        assertEquals(2, conversation.getMessages().size());
+        assertEquals(ConversationRole.USER, conversation.getMessages().get(0).role());
+        assertEquals(ConversationRole.OPENHAB, conversation.getMessages().get(1).role());
+        assertEquals("The object is already on.", conversation.getMessages().get(1).content());
     }
 
     private String noObjectsMessage(Locale locale) {

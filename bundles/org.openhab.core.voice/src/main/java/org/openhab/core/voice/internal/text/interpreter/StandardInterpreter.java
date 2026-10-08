@@ -41,8 +41,15 @@ import org.openhab.core.library.types.UpDownType;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.RefreshType;
 import org.openhab.core.types.TypeParser;
+import org.openhab.core.voice.internal.text.interpreter.llm.ItemCommandLLMTool;
 import org.openhab.core.voice.security.ItemPermissionResolver;
 import org.openhab.core.voice.text.HumanLanguageInterpreter;
+import org.openhab.core.voice.text.InterpretationException;
+import org.openhab.core.voice.text.InterpreterContext;
+import org.openhab.core.voice.text.conversation.Conversation;
+import org.openhab.core.voice.text.conversation.ConversationException;
+import org.openhab.core.voice.text.conversation.ConversationRole;
+import org.openhab.core.voice.text.interpreter.llm.LLMToolCall;
 import org.openhab.core.voice.text.interpreter.rulebased.AbstractRuleBasedInterpreter;
 import org.openhab.core.voice.text.interpreter.rulebased.Expression;
 import org.openhab.core.voice.text.interpreter.rulebased.Rule;
@@ -68,6 +75,11 @@ public class StandardInterpreter extends AbstractRuleBasedInterpreter {
     private final ItemRegistry itemRegistry;
     private final MetadataRegistry metadataRegistry;
 
+    private final ThreadLocal<@Nullable CommandExecution> currentCommand = new ThreadLocal<>();
+
+    private record CommandExecution(Item item, Command command) {
+    }
+
     @Activate
     public StandardInterpreter(final @Reference EventPublisher eventPublisher,
             final @Reference ItemRegistry itemRegistry, @Reference MetadataRegistry metadataRegistry,
@@ -81,6 +93,43 @@ public class StandardInterpreter extends AbstractRuleBasedInterpreter {
     @Deactivate
     protected void deactivate() {
         super.deactivate();
+    }
+
+    @Override
+    protected void postCommand(Item item, Command command) {
+        super.postCommand(item, command);
+        currentCommand.set(new CommandExecution(item, command));
+    }
+
+    @Override
+    public String interpret(Locale locale, InterpreterContext interpreterContext) throws InterpretationException {
+        Conversation.Message message = interpreterContext.conversation().getLastMessage();
+        if (message == null || message.role() != ConversationRole.USER) {
+            throw new InterpretationException("Last conversation message is not a user message");
+        }
+        currentCommand.remove();
+        try {
+            String response = super.interpret(locale, message.content(), interpreterContext.locationItem());
+            CommandExecution cmd = currentCommand.get();
+            if (cmd != null) {
+                LLMToolCall toolCall = new LLMToolCall(ItemCommandLLMTool.ID,
+                        Map.of("itemName", cmd.item().getName(), "command", cmd.command().toString()));
+                String toolResult = "Successfully sent command '" + cmd.command().toString() + "' to item '"
+                        + cmd.item().getName() + "'.";
+                interpreterContext.conversation().addMessage(ConversationRole.TOOL_CALL, toolCall.toJson());
+                interpreterContext.conversation().addMessage(ConversationRole.TOOL_RETURN, toolResult);
+                return "";
+            }
+            if (!response.isEmpty()) {
+                interpreterContext.conversation().addMessage(ConversationRole.OPENHAB, response);
+            }
+            return response;
+        } catch (ConversationException e) {
+            String errMsg = e.getMessage();
+            throw new InterpretationException(errMsg != null ? errMsg : "Unknown conversation error");
+        } finally {
+            currentCommand.remove();
+        }
     }
 
     @Override
